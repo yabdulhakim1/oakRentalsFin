@@ -343,7 +343,7 @@ export default function TransactionManager() {
 
       // Create a transaction for each selected car
       const promises = newParentTransaction.carIds.map(carId => {
-        const transactionData: Partial<Transaction> = {
+        const transactionData: Omit<Transaction, 'id'> = {
           type: newParentTransaction.type,
           amount: newParentTransaction.amount,
           description: newParentTransaction.description,

@@ -7,10 +7,13 @@ export interface Transaction {
   description: string;
   category: 'trip_earnings' | 'maintenance' | 'insurance' | 'insurance_claim' | 'other';
   tripId?: string;
-  createdAt?: string;
+  createdAt: string;
   tripEnd?: string;
   tripDays?: number;
   isManual?: boolean;
+  lastUpdateSource: string;
+  parentId?: string;
+  isParent?: boolean;
 }
 
 export interface Car {
