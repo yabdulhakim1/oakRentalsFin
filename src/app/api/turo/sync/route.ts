@@ -215,14 +215,7 @@ export async function POST(request: Request) {
     }
 
     // Process transactions first
-    const transactions: Array<{
-      carId: string;
-      type: TransactionType;
-      amount: number;
-      date: string;
-      category: TransactionCategory;
-      description: string;
-    }> = [];
+    const transactions: Array<Omit<Transaction, 'id'>> = [];
 
     // Map to store car IDs
     const carIdMap = new Map<string, string>();
@@ -349,18 +342,6 @@ export async function POST(request: Request) {
     console.log(`Created ${transactions.length} transactions`);
     if (transactions.length > 0) {
       console.log('Transaction to save:', JSON.stringify(transactions[0], null, 2));
-    }
-
-    if (transactions.length > 0) {
-      try {
-        await addTransactionsBatch(transactions);
-        console.log('Successfully saved all transactions to Firebase');
-      } catch (error) {
-        console.error('Error saving transactions:', error);
-        throw error;
-      }
-    } else {
-      console.warn('No valid transactions to save');
     }
 
     return new Response(JSON.stringify({
