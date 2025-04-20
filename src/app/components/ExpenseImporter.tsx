@@ -1,3 +1,4 @@
+// Expense Importer Component - Handles CSV import of expenses
 import { useState } from 'react';
 import { bulkImportExpenses, deleteAllExpenseTransactions } from '../lib/firebase/firebaseUtils';
 
@@ -111,13 +112,13 @@ export default function ExpenseImporter() {
             <p>First row: Column headers (insurance, Insurance Claim, parking, gas/uber, maintenance and repairs)</p>
             <p>For each month:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Month and year row (e.g., "July 2024")</li>
+              <li>Month and year row (e.g., &ldquo;July 2024&rdquo;)</li>
               <li>One row per car with car name and license plate, followed by expenses in each column</li>
               <li>Empty row between months</li>
             </ul>
             <p className="mt-2">Example:</p>
             <pre className="bg-gray-50 p-2 rounded text-xs mt-1">
-{`insurance,Insurance Claim,parking,gas/uber,maintenance and repairs
+              {`insurance,Insurance Claim,parking,gas/uber,maintenance and repairs
 July 2024
 Toyota Corolla (SES2507),-140,0,-25,0,0
 Volkswagen Jetta (SES2508),-160,1305,-87.5,-38,0

@@ -350,7 +350,7 @@ export default function TuroDataImport() {
               <div className="text-sm text-gray-500">
                 Hover over ✗ to see validation errors
                 {previewData.some(row => row.isNewCar) && (
-                  <span className="ml-2">• Cars marked as "New" will be added automatically</span>
+                  <span className="ml-2">• Cars marked as &quot;New&quot; will be added automatically</span>
                 )}
               </div>
               <button
