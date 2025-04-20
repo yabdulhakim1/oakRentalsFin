@@ -125,7 +125,7 @@ function splitTransactionAcrossMonths(
   endDate: string,
   totalAmount: number,
   tripDays: number,
-  baseTransaction: Omit<Transaction, 'id' | 'amount' | 'date'>
+  baseTransaction: Omit<Transaction, 'id' | 'amount' | 'date' | 'tripEnd' | 'tripDays'>
 ): Array<Omit<Transaction, 'id'>> {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -313,10 +313,12 @@ export async function POST(request: Request) {
 
         // Create base transaction object
         const baseTransaction = {
-          carId,
-          type: 'revenue' as TransactionType,
-          category: 'trip_earnings' as TransactionCategory,
-          description: `Trip earnings for ${record['Reservation ID']}`
+          carId: carId,
+          type: 'revenue' as const,
+          category: 'trip_earnings' as const,
+          description: `Trip earnings for ${record['Reservation ID']}`,
+          createdAt: new Date().toISOString(),
+          lastUpdateSource: 'turo_import'
         };
 
         // Split transaction across months if needed
@@ -329,7 +331,15 @@ export async function POST(request: Request) {
         );
 
         console.log('Split transactions:', splitTransactions);
-        transactions.push(...splitTransactions);
+
+        const transactions = splitTransactions.map(transaction => ({
+          ...transaction,
+          createdAt: new Date().toISOString(),
+          lastUpdateSource: 'turo_import'
+        }));
+
+        // Add transactions to database
+        const result = await addTransactionsBatch(transactions);
 
       } catch (err) {
         console.error('Error processing record:', err);
