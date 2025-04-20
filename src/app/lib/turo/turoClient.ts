@@ -139,7 +139,10 @@ export class TuroClient {
       type: 'revenue',
       amount: trip.earnings.ownerEarnings,
       description: `Turo trip ${trip.id}`,
-      category: 'turo_trip'
+      category: 'trip_earnings',
+      createdAt: new Date().toISOString(),
+      lastUpdateSource: 'turo_import',
+      severity: 'normal'
     };
   }
 
@@ -156,9 +159,9 @@ export class TuroClient {
       make: vehicle.make,
       model: vehicle.model,
       year: vehicle.year,
-      isActive: true,
       purchasePrice: 0,
-      status: 'active'
+      purchaseDate: new Date().toISOString().split('T')[0], // Set to current date
+      status: 'active' as const
     };
 
     const carId = await addCar(carData);
