@@ -162,9 +162,11 @@ export default function ROITable() {
                               <div>
                                 <label className="block text-sm font-medium text-gray-700">Purchase Date</label>
                                 <input
-                                  type="date"
+                                  type="text"
                                   name="purchaseDate"
-                                  defaultValue={car.purchaseDate}
+                                  defaultValue={car.purchaseDate || ''}
+                                  pattern="\d{4}-\d{2}-\d{2}"
+                                  placeholder="YYYY-MM-DD"
                                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                   required
                                 />
@@ -270,13 +272,17 @@ export default function ROITable() {
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
                     <div className="text-sm text-gray-900">{formatCurrency(roi.purchasePrice)}</div>
-                    <div className="text-xs text-gray-500">{new Date(car.purchaseDate).toLocaleDateString()}</div>
+                    <div className="text-xs text-gray-500">
+                      {car.purchaseDate ? new Date(car.purchaseDate).toLocaleDateString() : 'No date'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
                     {roi.salePrice ? (
                       <>
                         <div className="text-sm text-gray-900">{formatCurrency(roi.salePrice)}</div>
-                        <div className="text-xs text-gray-500">{new Date(car.saleDate!).toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-500">
+                          {car.saleDate ? new Date(car.saleDate).toLocaleDateString() : 'No date'}
+                        </div>
                       </>
                     ) : '-'}
                   </td>
