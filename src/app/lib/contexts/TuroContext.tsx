@@ -879,7 +879,7 @@ export function TuroProvider({ children }: { children: React.ReactNode }) {
       totalExpenses,
       profit: totalProfit,
       purchasePrice: car.purchasePrice,
-      salePrice: car.salePrice,
+      salePrice: car.salePrice ?? undefined,
       totalROI,
       monthlyROI,
       status: car.saleType ? car.saleType === 'totaled' ? 'totaled' : 'sold' : 'active'
