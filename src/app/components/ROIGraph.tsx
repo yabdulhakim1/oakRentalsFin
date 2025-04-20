@@ -14,6 +14,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { useTuro } from '../lib/contexts/TuroContext';
+import { Car } from '../lib/types/turo';
 
 ChartJS.register(
   CategoryScale,
@@ -42,7 +43,7 @@ export default function ROIGraph() {
     ? cars.filter(car => selectedCars.includes(car.id))
     : cars;
 
-  const sortedCars = [...displayCars].sort((a, b) => {
+  const sortedCars = [...displayCars].sort((a: Car, b: Car) => {
     const roiA = getCarROI(a.id);
     const roiB = getCarROI(b.id);
     return roiB.totalROI - roiA.totalROI;

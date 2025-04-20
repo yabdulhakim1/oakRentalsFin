@@ -21,7 +21,7 @@ export default function ROITable() {
     );
   }
 
-  const sortedCars = [...cars].sort((a, b) => {
+  const sortedCars = [...cars].sort((a: Car, b: Car) => {
     try {
       const roiA = getCarROI(a.id);
       const roiB = getCarROI(b.id);
