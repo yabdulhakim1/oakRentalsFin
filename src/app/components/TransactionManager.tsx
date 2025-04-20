@@ -12,6 +12,29 @@ interface ManualTransaction {
   amount: number;
   description: string;
   date: string;
+  category: 'trip_earnings' | 'maintenance' | 'insurance' | 'insurance_claim' | 'other';
+}
+
+interface TransactionGroup {
+  parent: Transaction;
+  splits: Transaction[];
+}
+
+type MonthGroup = {
+  processedTransactions: Array<{ parent: Transaction; splits: Transaction[] }>;
+  standaloneTransactions: Transaction[];
+};
+
+type MonthEntry = [string, MonthGroup];
+
+interface GroupType {
+  parent: Transaction | null;
+  splits: Transaction[];
+  totalAmount: number;
+  date: string;
+  tripDays: number;
+  tripEnd: string;
+  carId: string;
 }
 
 export default function TransactionManager() {
@@ -24,20 +47,31 @@ export default function TransactionManager() {
     type: 'expense',
     amount: 0,
     description: '',
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    category: 'maintenance'
   });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editAmount, setEditAmount] = useState<number>(0);
   const [showNewParentForm, setShowNewParentForm] = useState(false);
-  const [newParentTransaction, setNewParentTransaction] = useState({
+  const [newParentTransaction, setNewParentTransaction] = useState<{
+    type: 'revenue' | 'expense';
+    amount: number;
+    description: string;
+    date: string;
+    tripEnd: string;
+    tripDays: number;
+    carIds: string[];
+    category: 'trip_earnings' | 'maintenance' | 'insurance' | 'insurance_claim' | 'other';
+  }>({
     type: 'revenue',
     amount: 0,
     description: '',
     date: new Date().toISOString().split('T')[0],
     tripEnd: new Date().toISOString().split('T')[0],
     tripDays: 1,
-    carIds: [] as string[]
+    carIds: [],
+    category: 'trip_earnings'
   });
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [editDates, setEditDates] = useState({
@@ -58,7 +92,8 @@ export default function TransactionManager() {
     }
   }, [transactions]);
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return '';
     // Ensure we're working with the local timezone by creating a date at midnight local time
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('en-US', {
@@ -113,17 +148,17 @@ export default function TransactionManager() {
 
       if (!groups.has(groupKey)) {
         groups.set(groupKey, {
-          parent: null,
-          splits: [],
+          parent: null as Transaction | null,
+          splits: [] as Transaction[],
           totalAmount: 0,
           date: transaction.date,
-          tripDays: totalDays ? parseInt(totalDays) : transaction.tripDays,
-          tripEnd: transaction.tripEnd,
+          tripDays: totalDays ? parseInt(totalDays) : transaction.tripDays || 0,
+          tripEnd: transaction.tripEnd || '',
           carId: transaction.carId
         });
       }
 
-      const group = groups.get(groupKey);
+      const group = groups.get(groupKey)!;
 
       if (splitNum) {
         // This is a split transaction
@@ -143,28 +178,40 @@ export default function TransactionManager() {
       }
 
       return groups;
-    }, new Map());
+    }, new Map<string, {
+      parent: Transaction | null;
+      splits: Transaction[];
+      totalAmount: number;
+      date: string;
+      tripDays: number;
+      tripEnd: string;
+      carId: string;
+    }>());
 
   // Convert grouped transactions to array and sort by date
   const processedTransactions = Array.from(groupedTransactions.values())
-    .filter(group => group.splits.length > 0) // Only keep groups with splits
-    .map(group => {
+    .filter((group): group is GroupType => group.splits.length > 0) // Only keep groups with splits
+    .map((group: GroupType) => {
       // Sort splits by their day number
-      const sortedSplits = group.splits.sort((a, b) => {
+      const sortedSplits = [...group.splits].sort((a: Transaction, b: Transaction) => {
         const aNum = parseInt(a.description?.match(/\((\d+)\s+of/)?.[1] || '0');
         const bNum = parseInt(b.description?.match(/\((\d+)\s+of/)?.[1] || '0');
         return aNum - bNum;
       });
 
       // Create a synthetic parent if none exists
-      const parent = group.parent || {
+      const parent: Transaction = group.parent || {
         ...sortedSplits[0],
-        id: sortedSplits[0].id, // Use the first split's ID instead of generating a synthetic one
+        id: sortedSplits[0].id,
         description: `Trip earnings for ${group.splits[0].description?.match(/for (\d+)/)?.[1]}`,
         amount: group.totalAmount,
         date: group.date,
         tripEnd: group.tripEnd,
-        tripDays: group.tripDays
+        tripDays: group.tripDays,
+        category: 'trip_earnings' as const,
+        type: 'revenue' as const,
+        carId: group.carId,
+        isManual: false
       };
 
       return {
@@ -172,7 +219,11 @@ export default function TransactionManager() {
         splits: sortedSplits
       };
     })
-    .sort((a, b) => new Date(b.parent.date).getTime() - new Date(a.parent.date).getTime());
+    .sort((a: TransactionGroup, b: TransactionGroup): number => {
+      const dateA = new Date(a.parent.date);
+      const dateB = new Date(b.parent.date);
+      return dateB.getTime() - dateA.getTime();
+    });
 
   const handleAddTransaction = async () => {
     if (!selectedParent || !newTransaction.description || newTransaction.amount <= 0) return;
@@ -184,14 +235,14 @@ export default function TransactionManager() {
       // Ensure date is stored with consistent timezone handling
       const transactionDate = new Date(newTransaction.date + 'T00:00:00');
 
-      const transactionData = {
+      const transactionData: Partial<Transaction> = {
         ...newTransaction,
         date: transactionDate.toISOString().split('T')[0],
         carId: selectedParent.carId,
         parentId: selectedParent.id,
-        reservationId,
         isManual: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        lastUpdateSource: 'manual'
       };
 
       await addDoc(collection(db, 'transactions'), transactionData);
@@ -200,7 +251,8 @@ export default function TransactionManager() {
         type: 'expense',
         amount: 0,
         description: '',
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0],
+        category: 'maintenance'
       });
       setShowAddForm(false);
     } catch (error) {
@@ -215,11 +267,12 @@ export default function TransactionManager() {
       const startDate = new Date(editDates.date + 'T00:00:00');
       const endDate = new Date(editDates.tripEnd + 'T00:00:00');
 
-      const updates: any = {
+      const updates: Partial<Transaction> = {
         amount: editAmount,
         type: editType,
         description: editDescription,
         date: startDate.toISOString().split('T')[0],
+        category: editingTransaction.category // Preserve the original category
       };
 
       if (editDates.tripEnd !== editDates.date) {
@@ -271,8 +324,8 @@ export default function TransactionManager() {
     e.stopPropagation();
     setEditingTransaction(transaction);
     setEditAmount(transaction.amount);
-    setEditType(transaction.type as 'expense' | 'revenue');
-    setEditDescription(transaction.description || '');
+    setEditType(transaction.type);
+    setEditDescription(transaction.description);
     setEditDates({
       date: transaction.date,
       tripEnd: transaction.tripEnd || transaction.date
@@ -290,13 +343,18 @@ export default function TransactionManager() {
 
       // Create a transaction for each selected car
       const promises = newParentTransaction.carIds.map(carId => {
-        const transactionData = {
-          ...newParentTransaction,
-          carId, // Use the current car ID
+        const transactionData: Partial<Transaction> = {
+          type: newParentTransaction.type,
+          amount: newParentTransaction.amount,
+          description: newParentTransaction.description,
+          category: newParentTransaction.category,
+          carId,
           date: startDate.toISOString().split('T')[0],
           tripEnd: endDate.toISOString().split('T')[0],
+          tripDays: newParentTransaction.tripDays,
           isParent: true,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          lastUpdateSource: 'manual'
         };
         return addDoc(collection(db, 'transactions'), transactionData);
       });
@@ -310,7 +368,8 @@ export default function TransactionManager() {
         date: new Date().toISOString().split('T')[0],
         tripEnd: new Date().toISOString().split('T')[0],
         tripDays: 1,
-        carIds: []
+        carIds: [],
+        category: 'trip_earnings'
       });
       setShowNewParentForm(false);
     } catch (error) {
@@ -352,10 +411,7 @@ export default function TransactionManager() {
   };
 
   const groupTransactionsByMonth = () => {
-    const monthlyGroups = new Map<string, {
-      processedTransactions: Array<{ parent: Transaction; splits: Transaction[] }>;
-      standaloneTransactions: Transaction[];
-    }>();
+    const monthlyGroups = new Map<string, MonthGroup>();
 
     processedTransactions.forEach(transaction => {
       const monthKey = getMonthKey(transaction.parent.date);
@@ -386,7 +442,8 @@ export default function TransactionManager() {
       });
 
     return Array.from(monthlyGroups.entries())
-      .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+      .sort((a: MonthEntry, b: MonthEntry): number => 
+        new Date(b[0]).getTime() - new Date(a[0]).getTime());
   };
 
   return (
@@ -539,7 +596,7 @@ export default function TransactionManager() {
                         {/* Manual Transactions */}
                         {transactions
                           .filter(t => t.parentId === parent.id && t.isManual)
-                          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .sort((a: Transaction, b: Transaction): number => new Date(b.date).getTime() - new Date(a.date).getTime())
                           .map((manualTx, index) => (
                             <div 
                               key={`${parent.id}-manual-${index}`}
@@ -587,7 +644,7 @@ export default function TransactionManager() {
                 ))}
 
                 {standaloneTransactions
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .sort((a: Transaction, b: Transaction): number => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(transaction => (
                     <div key={transaction.id} className="bg-white rounded-lg shadow overflow-hidden">
                       <div className="p-4 hover:bg-gray-50 transition-colors group">
