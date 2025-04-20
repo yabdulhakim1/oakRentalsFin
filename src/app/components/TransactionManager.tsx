@@ -55,10 +55,6 @@ export default function TransactionManager() {
     const targetTransaction = transactions.find(t => t.description?.includes('40610091'));
     if (targetTransaction) {
       console.log('Found target transaction:', targetTransaction);
-      console.log('Has splits?', Array.isArray(targetTransaction.splits));
-      if (targetTransaction.splits) {
-        console.log('Splits:', targetTransaction.splits);
-      }
     }
   }, [transactions]);
 
