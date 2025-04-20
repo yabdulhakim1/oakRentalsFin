@@ -127,80 +127,59 @@ async function checkAndUpdateTransaction(transaction: Omit<Transaction, 'id'> & 
   }
 }
 
-export async function addTransactionsBatch(transactions: Array<Omit<Transaction, 'id'> & { id?: string }>) {
-  try {
-    console.log('Starting addTransactionsBatch with', transactions.length, 'transactions');
-    
-    const batchSize = 500;
-    const transactionsRef = collection(db, 'transactions');
-    let totalSaved = 0;
-    let totalSkipped = 0;
-    let totalUpdated = 0;
-    let savedIds: string[] = [];
+export const addTransactionsBatch = async (transactions: Array<Omit<Transaction, 'id'>>) => {
+  const results = {
+    saved: 0,
+    updated: 0,
+    skipped: 0,
+  };
 
-    for (let i = 0; i < transactions.length; i += batchSize) {
-      const batch = writeBatch(db);
-      const batchTransactions = transactions.slice(i, i + batchSize);
-      
-      console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(transactions.length / batchSize)}`);
-      
-      for (const transaction of batchTransactions) {
-        // Check for existing transaction and if it needs updating
-        const { exists, updated, id } = await checkAndUpdateTransaction(transaction);
+  const batch = writeBatch(db);
+
+  for (const transaction of transactions) {
+    const { tripId, date, amount } = transaction;
+
+    // Check for duplicate transactions
+    if (tripId) {
+      const duplicateQuery = query(
+        collection(db, 'transactions'),
+        where('tripId', '==', tripId),
+        where('date', '==', date),
+        where('amount', '==', amount)
+      );
+
+      const duplicateDocs = await getDocs(duplicateQuery);
+
+      if (!duplicateDocs.empty) {
+        // Update existing transaction if needed
+        const existingDoc = duplicateDocs.docs[0];
+        const existingData = existingDoc.data();
         
-        if (exists) {
-          if (updated) {
-            totalUpdated++;
-            savedIds.push(id!);
-            console.log(`Updated existing transaction: carId=${transaction.carId}, tripId=${transaction.tripId}, date=${transaction.date}`);
-          } else {
-            totalSkipped++;
-            console.log(`Skipped unchanged transaction: carId=${transaction.carId}, tripId=${transaction.tripId}, date=${transaction.date}`);
-          }
-          continue;
+        if (existingData.lastUpdateSource !== transaction.lastUpdateSource) {
+          batch.update(doc(db, 'transactions', existingDoc.id), transaction);
+          results.updated++;
+        } else {
+          results.skipped++;
         }
-
-        // Generate document reference with custom ID if provided
-        const docRef = transaction.id ? 
-          doc(transactionsRef, transaction.id) : 
-          doc(transactionsRef);
-
-        // Convert the date string to a Timestamp
-        const dateObj = new Date(transaction.date);
-        const transactionData = {
-          ...transaction,
-          amount: Number(transaction.amount),
-          date: Timestamp.fromDate(dateObj),
-          createdAt: serverTimestamp(),
-          lastUpdated: serverTimestamp(),
-          lastUpdateSource: 'csv_import'
-        };
-        
-        console.log(`Adding new transaction ${i + totalSaved + 1}:`, {
-          id: docRef.id,
-          ...transactionData,
-          date: dateObj.toISOString(),
-          amount: transactionData.amount
-        });
-        
-        batch.set(docRef, transactionData);
-        savedIds.push(docRef.id);
-        totalSaved++;
-      }
-
-      if (totalSaved > 0) {  // Only commit if there are new transactions to save
-        console.log(`Committing batch ${Math.floor(i / batchSize) + 1}...`);
-        await batch.commit();
-        console.log(`Successfully committed batch. Total saved: ${totalSaved}, Total updated: ${totalUpdated}, Total skipped: ${totalSkipped}`);
+        continue;
       }
     }
 
-    console.log(`Import complete. Added ${totalSaved} new transactions, updated ${totalUpdated} existing transactions, skipped ${totalSkipped} unchanged transactions.`);
-    return { totalSaved, totalUpdated, totalSkipped, savedIds };
-  } catch (error) {
-    console.error('Error in addTransactionsBatch:', error);
-    throw error;
+    // Add new transaction
+    const newTransactionRef = doc(collection(db, 'transactions'));
+    batch.set(newTransactionRef, {
+      ...transaction,
+      id: newTransactionRef.id,
+    });
+    results.saved++;
   }
+
+  await batch.commit();
+  return results;
+};
+
+function generateId(): string {
+  return Math.random().toString(36).substr(2, 9);
 }
 
 // Helper function to check for duplicate transactions
@@ -361,7 +340,7 @@ export async function addCar(car: Omit<Car, 'id'>) {
     if (querySnapshot.empty) {
       const docRef = await addDoc(carsRef, {
         ...car,
-        purchaseDate: Timestamp.fromDate(new Date(car.purchaseDate)),
+        purchaseDate: car.purchaseDate ? Timestamp.fromDate(new Date(car.purchaseDate)) : null,
         saleDate: car.saleDate ? Timestamp.fromDate(new Date(car.saleDate)) : null,
         createdAt: Timestamp.now()
       });
@@ -713,7 +692,10 @@ export async function getFleetStats() {
           amount,
           date: transaction.date,
           description: transaction.description || '',
-          category: transaction.category
+          category: transaction.category,
+          createdAt: transaction.createdAt,
+          lastUpdateSource: transaction.lastUpdateSource,
+          severity: transaction.severity
         });
       } else if (transaction.type === 'expense') {
         stats.totalExpenses += amount;
@@ -724,7 +706,10 @@ export async function getFleetStats() {
           amount,
           date: transaction.date,
           description: transaction.description || '',
-          category: transaction.category
+          category: transaction.category,
+          createdAt: transaction.createdAt,
+          lastUpdateSource: transaction.lastUpdateSource,
+          severity: transaction.severity
         });
       }
       return stats;
@@ -760,7 +745,10 @@ export async function getMonthlyStats() {
           amount,
           date: transaction.date,
           description: transaction.description || '',
-          category: transaction.category
+          category: transaction.category,
+          createdAt: transaction.createdAt,
+          lastUpdateSource: transaction.lastUpdateSource,
+          severity: transaction.severity
         });
         
         // Log each revenue addition
@@ -781,7 +769,10 @@ export async function getMonthlyStats() {
           amount,
           date: transaction.date,
           description: transaction.description || '',
-          category: transaction.category
+          category: transaction.category,
+          createdAt: transaction.createdAt,
+          lastUpdateSource: transaction.lastUpdateSource,
+          severity: transaction.severity
         });
       }
     });
@@ -792,4 +783,56 @@ export async function getMonthlyStats() {
     handleFirestoreError(error, 'getting monthly stats');
     return {};
   }
-} 
+}
+
+export const addCarTransaction = async (carId: string, transaction: Omit<Transaction, 'id' | 'carId'>) => {
+  const transactionData = {
+    id: doc(collection(db, 'transactions')).id,
+    carId,
+    ...transaction,
+    createdAt: new Date().toISOString(),
+    lastUpdateSource: 'manual',
+    severity: 'normal'
+  };
+
+  await addDoc(collection(db, 'transactions'), transactionData);
+  return transactionData;
+};
+
+export const addCarRevenue = async (
+  carId: string,
+  amount: number,
+  date: string,
+  description: string,
+  category: 'trip_earnings' | 'insurance_claim'
+) => {
+  return await addCarTransaction(carId, {
+    type: 'revenue',
+    amount,
+    date,
+    description,
+    category,
+    createdAt: new Date().toISOString(),
+    lastUpdateSource: 'manual',
+    severity: 'normal'
+  });
+};
+
+export const addCarExpense = async (
+  carId: string,
+  amount: number,
+  date: string,
+  description: string,
+  category: 'trip_earnings' | 'maintenance' | 'insurance' | 'insurance_claim' | 'other'
+) => {
+  return await addCarTransaction(carId, {
+    type: 'expense',
+    amount,
+    date,
+    description,
+    category,
+    createdAt: new Date().toISOString(),
+    lastUpdateSource: 'manual',
+    severity: 'normal'
+  });
+}; 

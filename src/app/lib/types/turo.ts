@@ -14,6 +14,7 @@ export interface Transaction {
   lastUpdateSource: string;
   parentId?: string;
   isParent?: boolean;
+  severity: 'normal' | 'high' | 'low';
 }
 
 export interface Car {

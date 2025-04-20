@@ -242,7 +242,8 @@ export default function TransactionManager() {
         parentId: selectedParent.id,
         isManual: true,
         createdAt: new Date().toISOString(),
-        lastUpdateSource: 'manual'
+        lastUpdateSource: 'manual',
+        severity: 'normal'
       };
 
       await addDoc(collection(db, 'transactions'), transactionData);
@@ -272,7 +273,8 @@ export default function TransactionManager() {
         type: editType,
         description: editDescription,
         date: startDate.toISOString().split('T')[0],
-        category: editingTransaction.category // Preserve the original category
+        category: editingTransaction.category, // Preserve the original category
+        severity: 'normal'
       };
 
       if (editDates.tripEnd !== editDates.date) {
@@ -354,7 +356,8 @@ export default function TransactionManager() {
           tripDays: newParentTransaction.tripDays,
           isParent: true,
           createdAt: new Date().toISOString(),
-          lastUpdateSource: 'manual'
+          lastUpdateSource: 'manual',
+          severity: 'normal'
         };
         return addDoc(collection(db, 'transactions'), transactionData);
       });

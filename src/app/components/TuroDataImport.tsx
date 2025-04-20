@@ -185,27 +185,23 @@ export default function TuroDataImport() {
         // Add only revenue transaction (preserve existing expenses)
         if (row.earnings > 0) {
           const result = await addTransactionsBatch([{
-            id: tripTransactionId,
+            tripId: row.tripId,
             carId,
-            date: row.startDate,
             type: 'revenue',
             amount: row.earnings,
+            date: row.startDate,
             description: `Trip earnings for ${row.tripId}`,
             category: 'trip_earnings',
-            tripId: row.tripId,
-            tripEnd: row.endDate,
-            tripDays: Math.ceil((new Date(row.endDate).getTime() - new Date(row.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1,
             createdAt: new Date().toISOString(),
-            lastUpdateSource: 'turo_import'
+            lastUpdateSource: 'turo_import',
+            severity: 'normal'
           }]);
 
-          if (result.totalSaved > 0 || result.totalUpdated > 0) {
-            // Store the actual Firestore document IDs
-            transactionIds.push(...(result.savedIds || []));
-            addedCount += result.totalSaved;
-            updatedCount += result.totalUpdated;
+          if (result.saved > 0 || result.updated > 0) {
+            addedCount += result.saved;
+            updatedCount += result.updated;
           }
-          if (result.totalSkipped > 0) skippedCount += result.totalSkipped;
+          if (result.skipped > 0) skippedCount += result.skipped;
         }
       }
 
