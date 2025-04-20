@@ -1,15 +1,14 @@
-# Ansh & Riley Full-Stack Template
+# Oak Rentals Fleet Management
 
-This is a full-stack template project for Software Composers to create  applications with AI.
+A web application for managing Turo fleet operations, including:
+- Car inventory management
+- Transaction tracking
+- Financial analytics and reporting
+- CSV import for Turo earnings
 
-## Getting started
-To create a new project, you go to `/paths`, choose from our list of Paths, and then use Cursor's Composer feature to quickly scaffold your project!
-
-You can also edit the Path's prompt template to be whatever you like!
-
-## Technologies used
-This doesn't really matter, but is useful for the AI to understand more about this project. We are using the following technologies
+## Technologies Used
 - React with Next.js 14 App Router
 - TailwindCSS
 - Firebase Auth, Storage, and Database
-- Multiple AI endpoints including OpenAI, Anthropic, and Replicate using Vercel's AI SDK
+- Real-time data synchronization
+- Responsive dashboard interface
