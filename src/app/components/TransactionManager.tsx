@@ -235,7 +235,7 @@ export default function TransactionManager() {
       // Ensure date is stored with consistent timezone handling
       const transactionDate = new Date(newTransaction.date + 'T00:00:00');
 
-      const transactionData: Omit<Transaction, 'id'> = {
+      const transactionData: Omit<Transaction, 'id'> & { parentId: string } = {
         ...newTransaction,
         date: transactionDate.toISOString().split('T')[0],
         carId: selectedParent.carId,
