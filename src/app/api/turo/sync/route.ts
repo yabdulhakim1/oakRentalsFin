@@ -306,13 +306,17 @@ export async function POST(request: Request) {
 
         // Create base transaction object
         const baseTransaction = {
-          carId: carId,
-          type: 'revenue' as const,
-          category: 'trip_earnings' as const,
+          carId,
+          type: 'revenue',
           description: `Trip earnings for ${record['Reservation ID']}`,
+          category: 'trip_earnings',
+          tripId: record['Reservation ID'],
+          tripEnd: endDate,
+          tripDays: tripDays,
           createdAt: new Date().toISOString(),
-          lastUpdateSource: 'turo_import'
-        };
+          lastUpdateSource: 'turo_import',
+          severity: 'normal'
+        } as const;
 
         // Split transaction across months if needed
         const splitTransactions = splitTransactionAcrossMonths(
