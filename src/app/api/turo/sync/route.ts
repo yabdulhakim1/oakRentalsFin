@@ -325,14 +325,17 @@ export async function POST(request: Request) {
 
         console.log('Split transactions:', splitTransactions);
 
-        const transactions = splitTransactions.map(transaction => ({
+        const processedTransactions = splitTransactions.map(transaction => ({
           ...transaction,
           createdAt: new Date().toISOString(),
           lastUpdateSource: 'turo_import'
         }));
 
         // Add transactions to database
-        const result = await addTransactionsBatch(transactions);
+        const result = await addTransactionsBatch(processedTransactions);
+
+        // Add to main transactions array
+        transactions.push(...processedTransactions);
 
       } catch (err) {
         console.error('Error processing record:', err);
