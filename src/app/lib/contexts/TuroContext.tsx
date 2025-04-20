@@ -25,6 +25,7 @@ interface TuroContextType {
   setSelectedYear: (year: number) => void;
   getCarROI: (carId: string) => CarROI;
   refreshCars: () => Promise<void>;
+  refreshTransactions: () => Promise<void>;
 }
 
 const TuroContext = createContext<TuroContextType | undefined>(undefined);
@@ -940,6 +941,16 @@ export function TuroProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshTransactions = useCallback(async () => {
+    try {
+      const allTransactions = await getTransactions();
+      setTransactions(allTransactions);
+      console.log('Refreshed transactions:', allTransactions.length);
+    } catch (error) {
+      console.error('Error refreshing transactions:', error);
+    }
+  }, []);
+
   if (!isClient) {
     return <LoadingState />;
   }
@@ -963,7 +974,8 @@ export function TuroProvider({ children }: { children: React.ReactNode }) {
       getMonthlyStats,
       setSelectedYear,
       getCarROI,
-      refreshCars
+      refreshCars,
+      refreshTransactions
     }}>
       {children}
     </TuroContext.Provider>
