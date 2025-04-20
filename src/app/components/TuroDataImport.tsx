@@ -190,11 +190,13 @@ export default function TuroDataImport() {
             date: row.startDate,
             type: 'revenue',
             amount: row.earnings,
-            description: `Trip ${row.tripId} Revenue`,
+            description: `Trip earnings for ${row.tripId}`,
             category: 'trip_earnings',
             tripId: row.tripId,
             tripEnd: row.endDate,
-            tripDays: Math.ceil((new Date(row.endDate).getTime() - new Date(row.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1
+            tripDays: Math.ceil((new Date(row.endDate).getTime() - new Date(row.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1,
+            createdAt: new Date().toISOString(),
+            lastUpdateSource: 'turo_import'
           }]);
 
           if (result.totalSaved > 0 || result.totalUpdated > 0) {
