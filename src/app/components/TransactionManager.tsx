@@ -41,6 +41,7 @@ export default function TransactionManager() {
   const { transactions, cars, refreshTransactions } = useTuro();
   const [selectedCarId, setSelectedCarId] = useState<string>('');
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [selectedTransactions, setSelectedTransactions] = useState<Set<string>>(new Set());
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedParent, setSelectedParent] = useState<Transaction | null>(null);
   const [newTransaction, setNewTransaction] = useState<ManualTransaction>({
@@ -449,6 +450,101 @@ export default function TransactionManager() {
         new Date(b[0]).getTime() - new Date(a[0]).getTime());
   };
 
+  const handleSelectTransaction = (transactionId: string) => {
+    const newSelected = new Set(selectedTransactions);
+    if (selectedTransactions.has(transactionId)) {
+      newSelected.delete(transactionId);
+    } else {
+      newSelected.add(transactionId);
+    }
+    setSelectedTransactions(newSelected);
+  };
+
+  const handleSelectAllInView = () => {
+    const newSelected = new Set(selectedTransactions);
+    transactions
+      .filter(t => !selectedCarId || t.carId === selectedCarId)
+      .forEach(t => newSelected.add(t.id));
+    setSelectedTransactions(newSelected);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedTransactions(new Set());
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedTransactions.size === 0) return;
+    
+    if (confirm(`Are you sure you want to delete ${selectedTransactions.size} transaction(s)?`)) {
+      try {
+        await deleteTransactions(Array.from(selectedTransactions));
+        setSelectedTransactions(new Set());
+        refreshTransactions();
+      } catch (error) {
+        console.error('Error deleting transactions:', error);
+        alert('Failed to delete transactions. Please try again.');
+      }
+    }
+  };
+
+  const handleRemoveDuplicates = async () => {
+    // Group transactions by Trip ID, only for trip earnings
+    const tripGroups = new Map<string, Transaction[]>();
+    
+    transactions.forEach(transaction => {
+      // Only consider trip earnings transactions
+      if (transaction.category === 'trip_earnings' && transaction.type === 'revenue') {
+        const tripIdMatch = transaction.description?.match(/for (\d+)/);
+        if (tripIdMatch) {
+          const tripId = tripIdMatch[1];
+          if (!tripGroups.has(tripId)) {
+            tripGroups.set(tripId, []);
+          }
+          tripGroups.get(tripId)!.push(transaction);
+        }
+      }
+    });
+
+    // Find duplicate transactions
+    const duplicateGroups: { tripId: string, transactions: Transaction[] }[] = [];
+    tripGroups.forEach((group, tripId) => {
+      if (group.length > 1) {
+        // Sort by date (newest first)
+        group.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        duplicateGroups.push({ tripId, transactions: group });
+      }
+    });
+
+    if (duplicateGroups.length === 0) {
+      alert('No duplicate trip transactions found.');
+      return;
+    }
+
+    // Create a detailed message showing what will be deleted
+    const message = duplicateGroups.map(({ tripId, transactions }) => {
+      const keeping = transactions[0];
+      const deleting = transactions.slice(1);
+      return `Trip ID ${tripId}:\nKeeping: ${formatDate(keeping.date)} - ${formatAmount(keeping.amount)}\n` +
+        `Deleting ${deleting.length} duplicate(s):\n${deleting.map(t => 
+          `- ${formatDate(t.date)} - ${formatAmount(t.amount)}`
+        ).join('\n')}`;
+    }).join('\n\n');
+
+    if (confirm(`Found duplicate trip transactions:\n\n${message}\n\nDo you want to remove the duplicates?`)) {
+      try {
+        const transactionsToDelete = duplicateGroups.flatMap(group => 
+          group.transactions.slice(1).map(t => t.id)
+        );
+        await deleteTransactions(transactionsToDelete);
+        refreshTransactions();
+        alert(`Successfully removed ${transactionsToDelete.length} duplicate trip transactions.`);
+      } catch (error) {
+        console.error('Error removing duplicates:', error);
+        alert('Failed to remove duplicate transactions. Please try again.');
+      }
+    }
+  };
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex justify-between items-center mb-4">
@@ -460,24 +556,56 @@ export default function TransactionManager() {
           >
             Add New Transaction
           </button>
-        </div>
-        <div className="flex items-center space-x-2">
-          <label htmlFor="carFilter" className="text-sm font-medium text-gray-700">
-            Filter by Car:
-          </label>
-          <select
-            id="carFilter"
-            value={selectedCarId}
-            onChange={(e) => setSelectedCarId(e.target.value)}
-            className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+          <button
+            onClick={handleRemoveDuplicates}
+            className="px-3 py-2 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors"
           >
-            <option value="">All Cars</option>
-            {cars.map((car) => (
-              <option key={car.id} value={car.id}>
-                {car.name}
-              </option>
-            ))}
-          </select>
+            Remove Duplicates
+          </button>
+        </div>
+        <div className="flex items-center space-x-4">
+          {/* Multi-select controls */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSelectAllInView}
+              className="px-3 py-2 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Select All
+            </button>
+            <button
+              onClick={handleDeselectAll}
+              className="px-3 py-2 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+            >
+              Deselect All
+            </button>
+            {selectedTransactions.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="px-3 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Delete Selected ({selectedTransactions.size})
+              </button>
+            )}
+          </div>
+          {/* Car filter */}
+          <div className="flex items-center space-x-2">
+            <label htmlFor="carFilter" className="text-sm font-medium text-gray-700">
+              Filter by Car:
+            </label>
+            <select
+              id="carFilter"
+              value={selectedCarId}
+              onChange={(e) => setSelectedCarId(e.target.value)}
+              className="block w-48 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="">All Cars</option>
+              {cars.map((car) => (
+                <option key={car.id} value={car.id}>
+                  {car.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -499,19 +627,25 @@ export default function TransactionManager() {
                 {monthProcessed.map(({ parent, splits }) => (
                   <div key={parent.id} className="bg-white rounded-lg shadow overflow-hidden">
                     {/* Parent Transaction */}
-                    <div 
-                      className="p-4 border-l-4 border-blue-500 cursor-pointer hover:bg-gray-50 transition-colors group"
-                      onClick={() => toggleExpand(parent.id)}
-                    >
+                    <div className="p-4 border-l-4 border-blue-500 hover:bg-gray-50 transition-colors group">
                       <div className="flex justify-between items-center">
-                        <div>
-                          <div className="font-semibold">{getCarName(parent.carId)}</div>
-                          <div className="text-sm text-gray-600">
-                            {formatDate(parent.date)}
-                            {parent.tripEnd && ` - ${formatDate(parent.tripEnd)}`}
-                            {parent.tripDays && ` (${parent.tripDays} days)`}
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedTransactions.has(parent.id)}
+                            onChange={() => handleSelectTransaction(parent.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <div>
+                            <div className="font-semibold">{getCarName(parent.carId)}</div>
+                            <div className="text-sm text-gray-600">
+                              {formatDate(parent.date)}
+                              {parent.tripEnd && ` - ${formatDate(parent.tripEnd)}`}
+                              {parent.tripDays && ` (${parent.tripDays} days)`}
+                            </div>
+                            <div className="text-sm text-gray-500">{parent.description}</div>
                           </div>
-                          <div className="text-sm text-gray-500">{parent.description}</div>
                         </div>
                         <div className="flex items-center space-x-3">
                           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -546,7 +680,10 @@ export default function TransactionManager() {
                           <span className={`font-semibold ${parent.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
                             {formatAmount(parent.amount)}
                           </span>
-                          <span className="text-gray-500 text-xl leading-none">
+                          <span 
+                            className="text-gray-500 text-xl leading-none cursor-pointer"
+                            onClick={() => toggleExpand(parent.id)}
+                          >
                             {expandedIds.has(parent.id) ? '▼' : '▶'}
                           </span>
                         </div>
@@ -564,11 +701,20 @@ export default function TransactionManager() {
                               className="p-3 border-b border-gray-100 ml-4 bg-gray-50 group"
                             >
                               <div className="flex justify-between items-center">
-                                <div>
-                                  <div className="text-sm text-gray-600">
-                                    {formatDate(dateRange.start)} - {formatDate(dateRange.end)}
+                                <div className="flex items-center space-x-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTransactions.has(split.id)}
+                                    onChange={() => handleSelectTransaction(split.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  />
+                                  <div>
+                                    <div className="text-sm text-gray-600">
+                                      {formatDate(dateRange.start)} - {formatDate(dateRange.end)}
+                                    </div>
+                                    <div className="text-sm text-gray-500">{split.description}</div>
                                   </div>
-                                  <div className="text-sm text-gray-500">{split.description}</div>
                                 </div>
                                 <div className="flex items-center space-x-3">
                                   <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -595,52 +741,6 @@ export default function TransactionManager() {
                             </div>
                           );
                         })}
-                        
-                        {/* Manual Transactions */}
-                        {transactions
-                          .filter(t => t.parentId === parent.id && t.isManual)
-                          .sort((a: Transaction, b: Transaction): number => new Date(b.date).getTime() - new Date(a.date).getTime())
-                          .map((manualTx, index) => (
-                            <div 
-                              key={`${parent.id}-manual-${index}`}
-                              className="p-3 border-b border-gray-100 ml-4 bg-gray-50 group"
-                            >
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <div className="text-sm text-gray-600">
-                                    {formatDate(manualTx.date)}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    {manualTx.description}
-                                    <span className="ml-2 text-xs text-gray-400">
-                                      (Manual {manualTx.type})
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center space-x-3">
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                      onClick={(e) => openEditForm(manualTx, e)}
-                                      className="p-1 text-gray-600 hover:text-blue-600"
-                                      title="Edit amount"
-                                    >
-                                      ✎
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteTransaction(manualTx)}
-                                      className="p-1 text-gray-600 hover:text-red-600"
-                                      title="Delete transaction"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                  <span className={`font-semibold ${manualTx.type === 'revenue' ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatAmount(manualTx.amount)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
                       </div>
                     )}
                   </div>
@@ -652,14 +752,23 @@ export default function TransactionManager() {
                     <div key={transaction.id} className="bg-white rounded-lg shadow overflow-hidden">
                       <div className="p-4 hover:bg-gray-50 transition-colors group">
                         <div className="flex justify-between items-center">
-                          <div>
-                            <div className="font-semibold">{getCarName(transaction.carId)}</div>
-                            <div className="text-sm text-gray-600">
-                              {formatDate(transaction.date)}
-                              {transaction.tripEnd && ` - ${formatDate(transaction.tripEnd)}`}
-                              {transaction.tripDays && ` (${transaction.tripDays} days)`}
+                          <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedTransactions.has(transaction.id)}
+                              onChange={() => handleSelectTransaction(transaction.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <div>
+                              <div className="font-semibold">{getCarName(transaction.carId)}</div>
+                              <div className="text-sm text-gray-600">
+                                {formatDate(transaction.date)}
+                                {transaction.tripEnd && ` - ${formatDate(transaction.tripEnd)}`}
+                                {transaction.tripDays && ` (${transaction.tripDays} days)`}
+                              </div>
+                              <div className="text-sm text-gray-500">{transaction.description}</div>
                             </div>
-                            <div className="text-sm text-gray-500">{transaction.description}</div>
                           </div>
                           <div className="flex items-center space-x-3">
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
